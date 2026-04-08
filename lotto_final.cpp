@@ -59,6 +59,8 @@ public:
     int maxVal;
     long long filterBefore; // 필터링 전 후보 번호 수
     long long filterAfter; // 필터링 후 후보 번호 수
+    string errorLog;
+    string matchLog;
     Filter() : filterName(""), filterSummary(""), minVal(0), maxVal(0), filterBefore(0), filterAfter(0) {
         fill(begin(numbersWeight), end(numbersWeight), 0);
     }
@@ -217,6 +219,29 @@ int main(){
     readPastNumbers(pastNumbersFile);
     pastNumbersFile.close();
 
+    for(auto &filter : filters){
+        int matchCount[7] = {0, }; // 0~6개 일치하는 횟수 세기 위한 배열
+        for(auto &lotto : pastNumbers){
+            int count = 0;
+            for(int i = 0; i < 6; i++){
+                for(int j = 0; j < 6; j++){
+                    if(filter.numbersWeight[lotto.numbers[j]] > 0 && lotto.numbers[j] == lotto.numbers[i]){
+                        count++;
+                        break;
+                    }
+                }
+            }
+            if(count >= filter.minVal && count <= filter.maxVal){
+                matchCount[count]++;
+            }
+        }
+        filter.filterBefore = pastNumbers.size();
+        filter.errorLog = "필터 '" + filter.filterName + "' 적용 결과:\n";
+        filter.matchLog = "";
+        for(int i = 0; i < 6; i++){
+            filter.errorLog += "번호 " + to_string(i) + ": " + to_string(filter.numbersWeight[i]) + "회\n";
+        }
+    }
 
     timer.endTime = timer.dateFormat();
     
