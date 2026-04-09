@@ -79,6 +79,7 @@ class LottoNumber{
 };
 class batchLottoNumbers{
     public:
+        int nowFilterIndex; // 현재 필터링 중인 필터 인덱스
         vector<LottoNumber> lottoNumbers;
 };
 vector<LottoNumber> pastNumbers; // 역대 당첨 번호 저장 공간, csv파일에서 읽어서 여기에 저장할 예정
@@ -339,7 +340,7 @@ int main(){
     cout << endl;
 
     cout << "필터링 : " << filterLine << " / " << filters.size() << " / " << filterLine-filters.size() << " / " << filterLine/filters.size() * 100 << "%" << endl;
-    cout << "데이터 : " << endl;
+    cout << "데이터 : " << totalDataLines << endl;
     cout << endl;
 
     
