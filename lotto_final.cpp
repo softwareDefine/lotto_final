@@ -65,7 +65,8 @@ public:
         fill(begin(numbersWeight), end(numbersWeight), 0);
     }
 };
-int filterLine = 0; // 필터 라인 수 세기 위한 변수
+long long filterLine = 0; // 필터 라인 수 세기 위한 변수
+long long totalDataLines = 0; // 전체 데이터 라인 수 세기 위한 변수
 vector<Filter> filters; // 필터 저장 공간, csv파일에서 읽어서 여기에 저장할 예정
 
 // 로또 번호 클래스 정의
@@ -206,7 +207,15 @@ void readData(ifstream& file){
     while(getline(file, line)){
         if (isFirstRow) { isFirstRow = false; continue; }
         // data.csv 파일에서 필요한 데이터 읽어서 처리하는 로직 작성
-
+        totalDataLines++; // 전체 데이터 라인 수 세기 위한 변수
+        for(int i = 0; i < line.size(); i++){
+            if(line[i] == ','){
+                // 셀 구분자 처리
+            } else {
+                // 셀 데이터 처리
+            }
+        }
+        cout << line << endl;
         // 예시: 후보 번호 생성, 필터링 적용 등
     }
 }
@@ -277,5 +286,8 @@ int main(){
 
     cout << "필터링 : " << filterLine << " / " << filters.size() << " / " << filterLine-filters.size() << " / " << filterLine/filters.size() * 100 << "%" << endl;
     cout << "데이터 : " << endl;
+    cout << endl;
+
+    
     return 0;
 }
