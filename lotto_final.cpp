@@ -204,19 +204,70 @@ void readPastNumbers(ifstream& file){
 void readData(ifstream& file){
     string line;
     bool isFirstRow = true;
+    batchLottoNumbers batchNumbers;
     while(getline(file, line)){
         if (isFirstRow) { isFirstRow = false; continue; }
         // data.csv 파일에서 필요한 데이터 읽어서 처리하는 로직 작성
+        int redundant[50] = {0, }; // 1~45 번호 사용 여부 체크 위한 배열
+        int columnIndex = 0;
         totalDataLines++; // 전체 데이터 라인 수 세기 위한 변수
+        string cell = "";
+        int flag = 0; // 데이터 오류 여부 체크 위한 변수
+        LottoNumber lottoNumber;
         for(int i = 0; i < line.size(); i++){
             if(line[i] == ','){
+                try{
+                    int number = stoi(cell);
+                    if(number < 0 || number > 45) {
+                        throw invalid_argument("잘못된 번호입니다.");
+                    }
+                    if(redundant[number] > 0){
+                        throw invalid_argument("중복된 번호입니다.");
+                    }
+                    redundant[number]++;
+                    lottoNumber.numbers[columnIndex] = number;
+                }catch(exception& e){
+                    // 잘못된 데이터 처리
+                    flag = 1;
+                    break;
+                }
+                // 셀 데이터 처리, 예시로 후보 번호 생성
+                cell ="";
                 // 셀 구분자 처리
+                columnIndex++;
             } else {
+                cell += line[i];
                 // 셀 데이터 처리
             }
         }
-        cout << line << endl;
+        if(cell != ""){ // 마지막 셀 처리
+            try{
+                int number = stoi(cell);
+                if(number < 0 || number > 45) {
+                    throw invalid_argument("잘못된 번호입니다.");
+                }
+                if(redundant[number] > 0){
+                    throw invalid_argument("중복된 번호입니다.");
+                }
+                redundant[number]++;
+                lottoNumber.numbers[columnIndex] = number;
+            }catch(exception& e){
+                // 잘못된 데이터 처리
+                flag = 1;
+                
+            }
+        }
+        if(flag == 1) continue; // 데이터 오류 시 해당 라인 건너뛰기
+        batchNumbers.lottoNumbers.push_back(lottoNumber);
+        if(totalDataLines % 5000 == 0){
+            candidateNumbers.push_back(batchNumbers);
+            batchNumbers.lottoNumbers.clear();
+        }
         // 예시: 후보 번호 생성, 필터링 적용 등
+    }
+    // 남은 데이터 처리
+    if(!batchNumbers.lottoNumbers.empty()){
+        candidateNumbers.push_back(batchNumbers);
     }
 }
 
@@ -272,8 +323,11 @@ int main(){
         cerr << "데이터 파일을 열 수 없습니다.\n 필터파일이 같은 경로에 있는지 확인하고 csv파일이 맞는지 다시한번 확인하세요.";
         return 1;
     }
+    // data.csv batch로 읽어서 candidateNumbers에 저장하는 함수, batch로 읽는 이유는 메모리 효율성 때문, 5000줄씩 끊어서 batch로 저장
     readData(dataFile);
     dataFile.close();
+
+    cout << candidateNumbers.size() << endl;
 
     // 쓰레드 생성 및 필터링 작업 수행
     timer.endTime = timer.dateFormat();
