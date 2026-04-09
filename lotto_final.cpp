@@ -67,7 +67,10 @@ public:
 };
 long long filterLine = 0; // 필터 라인 수 세기 위한 변수
 long long totalDataLines = 0; // 전체 데이터 라인 수 세기 위한 변수
+long long errorDataLines = 0; // 데이터 오류 라인 수 세기 위한 변수
 vector<Filter> filters; // 필터 저장 공간, csv파일에서 읽어서 여기에 저장할 예정
+
+vector<thread> threads; // 스레드 저장 공간
 
 // 로또 번호 클래스 정의
 class LottoNumber{
@@ -258,7 +261,10 @@ void readData(ifstream& file){
                 
             }
         }
-        if(flag == 1) continue; // 데이터 오류 시 해당 라인 건너뛰기
+        if(flag == 1){
+            errorDataLines++; // 데이터 오류 라인 수 세기 위한 변수
+            continue; // 데이터 오류 시 해당 라인 건너뛰기
+        }
         batchNumbers.lottoNumbers.push_back(lottoNumber);
         if(totalDataLines % 5000 == 0){
             candidateNumbers.push_back(batchNumbers);
@@ -328,9 +334,9 @@ int main(){
     readData(dataFile);
     dataFile.close();
 
-    cout << candidateNumbers.size() << endl;
-
     // 쓰레드 생성 및 필터링 작업 수행
+    
+
     timer.endTime = timer.dateFormat();
     
     long long timeDiff = timer.parseDateTime(timer.endTime) - timer.parseDateTime(timer.startTime);
@@ -340,7 +346,7 @@ int main(){
     cout << endl;
 
     cout << "필터링 : " << filterLine << " / " << filters.size() << " / " << filterLine-filters.size() << " / " << filterLine/filters.size() * 100 << "%" << endl;
-    cout << "데이터 : " << totalDataLines << endl;
+    cout << "데이터 : " << totalDataLines - errorDataLines << " / " << endl;
     cout << endl;
 
     
