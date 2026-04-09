@@ -76,7 +76,12 @@ class LottoNumber{
             fill(begin(numbers), end(numbers), 0);
         }
 };
+class batchLottoNumbers{
+    public:
+        vector<LottoNumber> lottoNumbers;
+};
 vector<LottoNumber> pastNumbers; // 역대 당첨 번호 저장 공간, csv파일에서 읽어서 여기에 저장할 예정
+vector<batchLottoNumbers> candidateNumbers; // 후보 번호 저장 공간, data.csv에서 읽어서 여기에 저장할 예정
 
 void readFilter(ifstream& file) {
     string line;
@@ -106,18 +111,21 @@ void readFilter(ifstream& file) {
                                 int number = stoi(cell);
                                 if(number > 0 && number <= 45){
                                     filter.numbersWeight[number]++;
+                                }else if(number > 45){
+                                    throw invalid_argument("45보다 큰 번호는 존재할 수 없습니다.");
                                 }
                             } else if (columnIndex == 47) {
                                 filter.minVal = cell[0] - '0';
                                 filter.maxVal = cell[2] - '0';
                                 if(filter.minVal < 0 || filter.maxVal > 6 || filter.minVal > filter.maxVal){
-                                    throw invalid_argument("잘못된 범위입니다.");
+                                    throw invalid_argument("minVal은 0~6 사이, maxVal은 0~6 사이여야 하며, minVal이 maxVal보다 작아야 합니다.");
                                 }
                             } else{
                                 continue;
                             }
                         }catch(exception& e){
                             // 필터 로그 큐에 결과 남기기
+                            filter.errorLog += string(e.what()) + " 열: " + to_string(columnIndex) + " 값: " + cell + ", ";
                             if (columnIndex >= 2 && columnIndex < 47) {
                             } else if (columnIndex == 47) {
                                 filter.minVal = 0; filter.maxVal = 0;
@@ -192,6 +200,17 @@ void readPastNumbers(ifstream& file){
     }
 }
 
+void readData(ifstream& file){
+    string line;
+    bool isFirstRow = true;
+    while(getline(file, line)){
+        if (isFirstRow) { isFirstRow = false; continue; }
+        // data.csv 파일에서 필요한 데이터 읽어서 처리하는 로직 작성
+
+        // 예시: 후보 번호 생성, 필터링 적용 등
+    }
+}
+
 int main(){
     // 로또 프로그램 배너 출력
     cout << "=============================" << endl;
@@ -219,38 +238,44 @@ int main(){
     readPastNumbers(pastNumbersFile);
     pastNumbersFile.close();
 
+    // 필터와 역대당첨번호 중복 검사 및 일치하는 번호 개수 세기
     for(auto &filter : filters){
         int matchCount[7] = {0, }; // 0~6개 일치하는 횟수 세기 위한 배열
         for(auto &lotto : pastNumbers){
-            int count = 0;
+            int cnt = 0;
             for(int i = 0; i < 6; i++){
-                for(int j = 0; j < 6; j++){
-                    if(filter.numbersWeight[lotto.numbers[j]] > 0 && lotto.numbers[j] == lotto.numbers[i]){
-                        count++;
-                        break;
-                    }
+                if(filter.numbersWeight[lotto.numbers[i]] > 0){
+                    cnt++;
                 }
             }
-            if(count >= filter.minVal && count <= filter.maxVal){
-                matchCount[count]++;
-            }
+            matchCount[cnt]++;
         }
         filter.filterBefore = pastNumbers.size();
-        filter.errorLog = "필터 '" + filter.filterName + "' 적용 결과:\n";
         filter.matchLog = "";
-        for(int i = 0; i < 6; i++){
-            filter.errorLog += "번호 " + to_string(i) + ": " + to_string(filter.numbersWeight[i]) + "회\n";
+        for(int i = 0; i < 7; i++){
+            filter.matchLog += "당첨/" + to_string(i) + "=" + to_string(matchCount[i]) + (i == 6 ? "회" : "회, ");
         }
     }
 
+    ifstream dataFile("data.csv"); // csv파일은 같은 폴더 안에 있어야함
+    // data 파일 안열리는 경우
+    if (!dataFile.is_open()) {
+        cerr << "데이터 파일을 열 수 없습니다.\n 필터파일이 같은 경로에 있는지 확인하고 csv파일이 맞는지 다시한번 확인하세요.";
+        return 1;
+    }
+    readData(dataFile);
+    dataFile.close();
+
+    // 쓰레드 생성 및 필터링 작업 수행
     timer.endTime = timer.dateFormat();
     
     long long timeDiff = timer.parseDateTime(timer.endTime) - timer.parseDateTime(timer.startTime);
     cout << "시작 시간 : " << timer.startTime << endl;
     cout << "종료 시간 : " << timer.endTime << endl;
     cout << "총 가동 시간 : " << timeDiff/3600 << "시간 " << timeDiff%3600/60 << "분 " << timeDiff%60 << "초" << endl;
+    cout << endl;
 
-    cout << "필터링 : " << filterLine << " / " << filters.size() << " / " << filterLine-filters.size() << " / " << endl;
+    cout << "필터링 : " << filterLine << " / " << filters.size() << " / " << filterLine-filters.size() << " / " << filterLine/filters.size() * 100 << "%" << endl;
     cout << "데이터 : " << endl;
     return 0;
 }
