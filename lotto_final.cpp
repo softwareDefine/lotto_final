@@ -24,7 +24,8 @@ using namespace std;
 
 /* 
 - 아키텍처
-파일 읽기 -> filter.csv, 역대당첨번호 메모리에 넣기 -> data.csv 큐에 넣기 -> 큐에다 빼고 필터링 -> 결과 저장 -> 결과 출력
+파일 읽기 -> filter.csv, 역대당첨번호 메모리에 넣기 -> data.csv 큐에 넣기 -> 큐를 빼면서 쓰레드마다 필터링 -> collection.csv, result.csv에 결과 저장 -> 콘솔 현황 출력
+- 필터링 로직
 */
 
 // 시간 관련 클래스 정의
@@ -69,6 +70,8 @@ public:
 long long filterLine = 0; // 필터 라인 수 세기 위한 변수
 long long totalDataLines = 0; // 전체 데이터 라인 수 세기 위한 변수
 long long errorDataLines = 0; // 데이터 오류 라인 수 세기 위한 변수
+long long done = 0; // 필터링 완료한 후보 번호 수 세기 위한 변수
+long long resultSize = 0; // 결과 번호 수 세기 위한 변수
 vector<Filter> filters; // 필터 저장 공간, csv파일에서 읽어서 여기에 저장할 예정
 
 vector<thread> threads; // 스레드 저장 공간
@@ -88,9 +91,11 @@ class batchLottoNumbers{
     public:
         int nowFilterIndex; // 현재 필터링 중인 필터 인덱스
         vector<LottoNumber> lottoNumbers;
+        batchLottoNumbers() : nowFilterIndex(0) {}
 };
 vector<LottoNumber> pastNumbers; // 역대 당첨 번호 저장 공간, csv파일에서 읽어서 여기에 저장할 예정
 queue<batchLottoNumbers> candidateNumbers; // 후보 번호 저장 공간, data.csv에서 읽어서 여기에 저장할 예정
+vector<batchLottoNumbers> resultNumbers; // 결과 번호 저장 공간, data.csv에서 읽어서 여기에 저장할 예정
 
 void readFilter(ifstream& file) {
     string line;
@@ -285,16 +290,17 @@ void readData(ifstream& file){
 void worker(int threadId){
     while (true) {
         batchLottoNumbers batchNumbers;
+        batchLottoNumbers emptyBatch; // 빈 배치 생성
         {
             unique_lock<mutex> lock(mtx);
 
             // 큐에 작업이 들어올 때까지 기다림
             cv.wait(lock, [] {
-                return !candidateNumbers.empty();
+                return !candidateNumbers.empty() || done >= totalDataLines - errorDataLines; // 작업이 있거나 모든 작업이 완료된 경우
             });
 
             // 작업도 없고 끝났으면 종료
-            if (candidateNumbers.empty() && finished) {
+            if (candidateNumbers.empty() && done >= totalDataLines - errorDataLines) {
                 return;
             }
 
@@ -305,16 +311,39 @@ void worker(int threadId){
 
         // lock 해제 후 실제 작업 수행
         for(auto &lottoNumber : batchNumbers.lottoNumbers){
-            
+            int cnt = 0;
+            filters[batchNumbers.nowFilterIndex].filterBefore++; // 필터링 전 후보 번호 수 증가
+            for(int i = 0; i < 6; i++){
+                cnt += filters[batchNumbers.nowFilterIndex].numbersWeight[lottoNumber.numbers[i]]; // 후보 번호 하나, 예시로 lottoNumber.numbers[i] 사용
+            }
+            if(cnt < filters[batchNumbers.nowFilterIndex].minVal || cnt > filters[batchNumbers.nowFilterIndex].maxVal){
+                done++; // 필터링 완료한 후보 번호 수 증가
+                continue; // 필터링 조건에 맞지 않으면 건너뜁니다.
+            }
+            filters[batchNumbers.nowFilterIndex].filterAfter++; // 필터링 후 후보 번호 수 증가
+            emptyBatch.lottoNumbers.push_back(lottoNumber); // 필터링 조건에 맞는 번호는 빈 배치에 추가
         }
         // 예시: 필터링 작업 수행
         if(batchNumbers.nowFilterIndex < filters.size()){
             // 필터링 로직 작성
-            batchNumbers.nowFilterIndex++;
+            emptyBatch.nowFilterIndex = batchNumbers.nowFilterIndex + 1; // 다음 필터 인덱스로 설정
             {
-            unique_lock<mutex> lock(mtx);
-            // 필터링 후 queue에 결과 저장하는 로직 작성
-            candidateNumbers.push(batchNumbers);
+                unique_lock<mutex> lock(mtx);
+                // 필터링 후 queue에 결과 저장하는 로직 작성
+                if(!emptyBatch.lottoNumbers.empty()){
+                    candidateNumbers.push(emptyBatch);
+                }
+            }
+        }else{
+            {
+                done += emptyBatch.lottoNumbers.size(); // 필터링 완료한 후보 번호 수 증가
+                unique_lock<mutex> lock(mtx);
+                // 최종 결과 저장하는 로직 작성
+                if(!emptyBatch.lottoNumbers.empty()){
+                    done += emptyBatch.lottoNumbers.size(); // 필터링 완료한 후보 번호 수 증가
+                    resultSize += emptyBatch.lottoNumbers.size(); // 결과 번호 수 증가
+                    resultNumbers.push_back(emptyBatch);
+                }
             }
         }
     }
@@ -388,6 +417,12 @@ int main(){
         t.join();
     }
 
+    ofstream resultFile("result.csv"); // 결과 저장할 csv파일, 같은 폴더 안에 생성됨
+    if(!resultFile.is_open()){
+        cerr << "결과 파일을 생성할 수 없습니다.\n 같은 경로에 쓰기 권한이 있는지 확인하세요.";
+        return 1;
+    }
+    
     timer.endTime = timer.dateFormat();
     
     long long timeDiff = timer.parseDateTime(timer.endTime) - timer.parseDateTime(timer.startTime);
@@ -396,10 +431,8 @@ int main(){
     cout << "총 가동 시간 : " << timeDiff/3600 << "시간 " << timeDiff%3600/60 << "분 " << timeDiff%60 << "초" << endl;
     cout << endl;
 
-    cout << "필터링 : " << filterLine << " / " << filters.size() << " / " << filterLine-filters.size() << " / " << filterLine/filters.size() * 100 << "%" << endl;
-    cout << "데이터 : " << totalDataLines - errorDataLines << " / " << endl;
+    cout << "필터링 : " << filterLine << " / " << filters.size() << " / " << filterLine-filters.size() << " / " <<filters.size()/static_cast<double>(filterLine) * 100 << "%" << endl;
+    cout << "데이터 : " << totalDataLines - errorDataLines << " / " << resultSize << " / " << totalDataLines - errorDataLines - resultSize << " / " << resultSize/static_cast<double>( totalDataLines - errorDataLines) * 100 << "%" << endl;
     cout << endl;
-
-    
     return 0;
 }
