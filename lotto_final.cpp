@@ -18,6 +18,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <chrono>
 
 using namespace std;
 
@@ -71,6 +72,9 @@ long long errorDataLines = 0; // 데이터 오류 라인 수 세기 위한 변수
 vector<Filter> filters; // 필터 저장 공간, csv파일에서 읽어서 여기에 저장할 예정
 
 vector<thread> threads; // 스레드 저장 공간
+mutex mtx; // 스레드 동기화 위한 뮤텍스
+condition_variable cv; // 스레드 동기화 위한 조건 변수
+bool finished = false; // 스레드 작업 완료 여부 체크 위한 변수
 
 // 로또 번호 클래스 정의
 class LottoNumber{
@@ -86,7 +90,7 @@ class batchLottoNumbers{
         vector<LottoNumber> lottoNumbers;
 };
 vector<LottoNumber> pastNumbers; // 역대 당첨 번호 저장 공간, csv파일에서 읽어서 여기에 저장할 예정
-vector<batchLottoNumbers> candidateNumbers; // 후보 번호 저장 공간, data.csv에서 읽어서 여기에 저장할 예정
+queue<batchLottoNumbers> candidateNumbers; // 후보 번호 저장 공간, data.csv에서 읽어서 여기에 저장할 예정
 
 void readFilter(ifstream& file) {
     string line;
@@ -267,14 +271,52 @@ void readData(ifstream& file){
         }
         batchNumbers.lottoNumbers.push_back(lottoNumber);
         if(totalDataLines % 5000 == 0){
-            candidateNumbers.push_back(batchNumbers);
+            candidateNumbers.push(batchNumbers);
             batchNumbers.lottoNumbers.clear();
         }
         // 예시: 후보 번호 생성, 필터링 적용 등
     }
     // 남은 데이터 처리
     if(!batchNumbers.lottoNumbers.empty()){
-        candidateNumbers.push_back(batchNumbers);
+        candidateNumbers.push(batchNumbers);
+    }
+}
+
+void worker(int threadId){
+    while (true) {
+        batchLottoNumbers batchNumbers;
+        {
+            unique_lock<mutex> lock(mtx);
+
+            // 큐에 작업이 들어올 때까지 기다림
+            cv.wait(lock, [] {
+                return !candidateNumbers.empty();
+            });
+
+            // 작업도 없고 끝났으면 종료
+            if (candidateNumbers.empty() && finished) {
+                return;
+            }
+
+            // 큐에서 작업 하나 꺼냄
+            batchNumbers = candidateNumbers.front();
+            candidateNumbers.pop();
+        } // 여기서 lock 해제
+
+        // lock 해제 후 실제 작업 수행
+        for(auto &lottoNumber : batchNumbers.lottoNumbers){
+            
+        }
+        // 예시: 필터링 작업 수행
+        if(batchNumbers.nowFilterIndex < filters.size()){
+            // 필터링 로직 작성
+            batchNumbers.nowFilterIndex++;
+            {
+            unique_lock<mutex> lock(mtx);
+            // 필터링 후 queue에 결과 저장하는 로직 작성
+            candidateNumbers.push(batchNumbers);
+            }
+        }
     }
 }
 
@@ -335,7 +377,16 @@ int main(){
     dataFile.close();
 
     // 쓰레드 생성 및 필터링 작업 수행
-    
+    for(int i = 0; i < 3; i++){
+        threads.emplace_back(worker, i+1);
+    }
+
+    // 더 이상 작업이 없음을 알림
+    cv.notify_all(); // 모든 대기 중인 스레드 깨움
+    // 스레드 종료 대기
+    for(auto &t : threads){
+        t.join();
+    }
 
     timer.endTime = timer.dateFormat();
     
