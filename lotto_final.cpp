@@ -457,6 +457,8 @@ int main(){
                        << lotto.numbers[3] << "," << lotto.numbers[4] << "," << lotto.numbers[5] << "\n";
         }
     }
+    
+    resultFile.close();
 
     ofstream collectionFile("collection.csv"); // 결과 저장할 csv파일, 같은 폴더 안에 생성됨
     if(!collectionFile.is_open()){
@@ -474,6 +476,8 @@ int main(){
                        << (filters[i].matchLog.empty() ? "" : csvEscape(filters[i].matchLog)) << "\n";
     }
     
+    collectionFile.close();
+
     timer.endTime = timer.dateFormat();
     
     long long timeDiff = timer.parseDateTime(timer.endTime) - timer.parseDateTime(timer.startTime);
