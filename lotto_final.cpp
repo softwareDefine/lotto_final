@@ -488,5 +488,14 @@ int main(){
 
     cout << "최종 파일 행수 : " <<  resultSize << " (헤더 제외)" << endl;
     cout << "결과 파일 : " << "collection.csv 자동 생성 완료" << endl; 
+
+    while(true){
+        cout << "프로그램을 종료하려면 'exit'를 입력하세요 : ";
+        string input;
+        cin >> input;
+        if(input == "exit"){
+            break;
+        }
+    }
     return 0;
 }
